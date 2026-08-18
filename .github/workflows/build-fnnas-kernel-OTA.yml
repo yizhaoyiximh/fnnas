@@ -94,71 +94,53 @@ jobs:
           sudo timedatectl set-timezone "${TZ:-Etc/UTC}"
           echo "status=success" >> ${GITHUB_OUTPUT}
 
-      # ========== 创建大容量虚拟磁盘（避免空间不足） ==========
-      - name: 创建虚拟磁盘扩展存储空间
-        id: disk
+      # ========== 获取镜像文件（支持 URL 和本地路径） ==========
+      - name: 获取 FnNAS 镜像文件
+        id: get_image
         run: |
-          root_avail=$(df --block-size=1G / | tail -1 | awk '{print $4}')
-          root_size=$(( root_avail - 4 ))
-          [[ "${root_size}" -gt 0 ]] || { echo "错误：磁盘空间不足"; exit 1; }
-          sudo truncate -s "${root_size}"G /root.img
-          build_dev=$(sudo losetup --find --show /root.img)
-          sudo mkfs.xfs -f "${build_dev}"
-          sudo mkdir -p /builder
-          sudo mount "${build_dev}" /builder
-          sudo chown -R runner:runner /builder
-          echo "status=success" >> ${GITHUB_OUTPUT}
-
-      # ========== 准备自定义镜像文件（支持 URL 和本地路径） ==========
-      - name: 准备自定义 FnNAS 镜像
-        id: prepare_image
-        working-directory: /builder
-        run: |
-          mkdir -p fnnas
           IMAGE_INPUT="${{ inputs.fnnas_image_path }}"
           IMAGE_NAME=$(basename "${IMAGE_INPUT}")
+
+          # 在当前工作目录创建 fnnas-arm64 文件夹（ophub/action 期望的路径）
+          mkdir -p ${GITHUB_WORKSPACE}/fnnas-arm64
+          cd ${GITHUB_WORKSPACE}/fnnas-arm64
 
           # 判断是 URL 还是本地文件路径
           if [[ "${IMAGE_INPUT}" =~ ^https?:// ]]; then
             echo "检测到 URL 链接，开始下载..."
-            # 从 URL 下载
-            if curl -fSL -o "fnnas/${IMAGE_NAME}" "${IMAGE_INPUT}"; then
+            if curl -fSL -o "${IMAGE_NAME}" "${IMAGE_INPUT}"; then
               echo "下载成功：${IMAGE_INPUT}"
-              echo "下载的文件名：${IMAGE_NAME}"
+              ls -lh "${IMAGE_NAME}"
             else
               echo "错误：从 URL 下载失败 ${IMAGE_INPUT}"
               exit 1
             fi
           else
-            # 本地文件路径：从仓库复制
             echo "检测到本地文件路径，开始复制..."
-            if [[ -f "${{ github.workspace }}/${IMAGE_INPUT}" ]]; then
-              cp "${{ github.workspace }}/${IMAGE_INPUT}" "fnnas/${IMAGE_NAME}"
+            SOURCE_FILE="${GITHUB_WORKSPACE}/${IMAGE_INPUT}"
+            if [[ -f "${SOURCE_FILE}" ]]; then
+              cp "${SOURCE_FILE}" "${IMAGE_NAME}"
               echo "已复制镜像：${IMAGE_INPUT}"
+              ls -lh "${IMAGE_NAME}"
             else
-              echo "错误：找不到本地镜像文件 ${IMAGE_INPUT}"
+              echo "错误：找不到本地镜像文件 ${SOURCE_FILE}"
               echo "提示：请检查路径是否正确，或使用完整的 URL 链接"
               exit 1
             fi
           fi
 
-          # 如果文件是 .xz 或 .gz 压缩格式
-          if [[ "${{ inputs.image_is_compressed }}" == "true" ]]; then
-            echo "镜像文件为压缩格式，构建时将自动解压"
-          fi
-
-          # 创建软链接供后续步骤使用
-          ln -sf /builder/fnnas ${{ github.workspace }}/fnnas
+          # 如果是压缩文件，记录文件名（ophub/action 会自动解压 .xz 和 .gz）
+          echo "image_file=${IMAGE_NAME}" >> ${GITHUB_OUTPUT}
           echo "status=success" >> ${GITHUB_OUTPUT}
 
       # ========== 构建内核升级包 ==========
       - name: 构建自定义 FnNAS 内核
         id: build_kernel
         uses: ophub/fnnas@main
-        if: ${{ steps.prepare_image.outputs.status == 'success' && !cancelled() }}
+        if: ${{ steps.get_image.outputs.status == 'success' && !cancelled() }}
         with:
           build_target: kernel
-          fnnas_path: fnnas/*.img
+          fnnas_path: fnnas-arm64/*.img*
           debs_repo: ${{ inputs.kernel_source == 'debs_repo' && inputs.debs_repo || '' }}
           debs_install: ${{ inputs.kernel_source == 'debs_repo' && inputs.kernel_platform || 'none' }}
           dtbs_version: ${{ inputs.dtbs_version }}
