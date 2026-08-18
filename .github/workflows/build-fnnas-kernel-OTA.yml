@@ -1,5 +1,5 @@
 #==========================================================================
-# Description: 构建自定义 FnNAS 内核升级包（支持用户指定的镜像和内核）
+# Description: 构建自定义 FnNAS 内核升级包（支持 URL 下载和本地路径）
 # Copyright (C) 2025 https://fnnas.com
 # Copyright (C) 2026 https://github.com/ophub/fnnas
 #==========================================================================
@@ -11,12 +11,12 @@ on:
     inputs:
       # ========== 镜像来源 ==========
       fnnas_image_path:
-        description: "仓库中的 FnNAS 镜像文件路径（例如：fnnas/fnos_arm_xxx.img）*"
+        description: "镜像文件路径（支持仓库内路径 或 完整 URL 下载链接）"
         required: true
         default: ""
         type: string
       image_is_compressed:
-        description: "镜像文件是否为压缩格式（.xz）？"
+        description: "镜像文件是否为压缩格式（.xz / .gz）？"
         required: false
         default: false
         type: boolean
@@ -109,27 +109,42 @@ jobs:
           sudo chown -R runner:runner /builder
           echo "status=success" >> ${GITHUB_OUTPUT}
 
-      # ========== 准备自定义镜像文件 ==========
+      # ========== 准备自定义镜像文件（支持 URL 和本地路径） ==========
       - name: 准备自定义 FnNAS 镜像
         id: prepare_image
         working-directory: /builder
         run: |
           mkdir -p fnnas
-          IMAGE_PATH="${{ inputs.fnnas_image_path }}"
-          IMAGE_NAME=$(basename "${IMAGE_PATH}")
+          IMAGE_INPUT="${{ inputs.fnnas_image_path }}"
+          IMAGE_NAME=$(basename "${IMAGE_INPUT}")
 
-          # 从仓库复制镜像文件到工作目录
-          if [[ -f "${{ github.workspace }}/${IMAGE_PATH}" ]]; then
-            cp "${{ github.workspace }}/${IMAGE_PATH}" "fnnas/${IMAGE_NAME}"
-            echo "已复制镜像：${IMAGE_PATH}"
+          # 判断是 URL 还是本地文件路径
+          if [[ "${IMAGE_INPUT}" =~ ^https?:// ]]; then
+            echo "检测到 URL 链接，开始下载..."
+            # 从 URL 下载
+            if curl -fSL -o "fnnas/${IMAGE_NAME}" "${IMAGE_INPUT}"; then
+              echo "下载成功：${IMAGE_INPUT}"
+              echo "下载的文件名：${IMAGE_NAME}"
+            else
+              echo "错误：从 URL 下载失败 ${IMAGE_INPUT}"
+              exit 1
+            fi
           else
-            echo "错误：找不到镜像文件 ${IMAGE_PATH}"
-            exit 1
+            # 本地文件路径：从仓库复制
+            echo "检测到本地文件路径，开始复制..."
+            if [[ -f "${{ github.workspace }}/${IMAGE_INPUT}" ]]; then
+              cp "${{ github.workspace }}/${IMAGE_INPUT}" "fnnas/${IMAGE_NAME}"
+              echo "已复制镜像：${IMAGE_INPUT}"
+            else
+              echo "错误：找不到本地镜像文件 ${IMAGE_INPUT}"
+              echo "提示：请检查路径是否正确，或使用完整的 URL 链接"
+              exit 1
+            fi
           fi
 
-          # 如果文件是 .xz 压缩格式
+          # 如果文件是 .xz 或 .gz 压缩格式
           if [[ "${{ inputs.image_is_compressed }}" == "true" ]]; then
-            echo "镜像文件为压缩格式（.xz），构建时将自动解压"
+            echo "镜像文件为压缩格式，构建时将自动解压"
           fi
 
           # 创建软链接供后续步骤使用
@@ -163,7 +178,7 @@ jobs:
           gh_token: ${{ secrets.GITHUB_TOKEN }}
           body: |
             自定义 FnNAS 内核升级包
-            - 基础镜像：${{ inputs.fnnas_image_path }}
+            - 基础镜像来源：${{ inputs.fnnas_image_path }}
             - 内核来源：${{ inputs.kernel_source }}
             - 内核版本：${{ inputs.kernel_version }}
             - 硬件平台：${{ inputs.kernel_platform }}
