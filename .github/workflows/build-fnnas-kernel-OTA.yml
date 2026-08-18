@@ -1,43 +1,45 @@
 #==========================================================================
-# Description: Build Custom FnNAS Kernel (with user-specified image & kernel)
+# Description: 构建自定义 FnNAS 内核升级包（支持用户指定的镜像和内核）
+# Copyright (C) 2025 https://fnnas.com
+# Copyright (C) 2026 https://github.com/ophub/fnnas
 #==========================================================================
 
-name: Build Custom FnNAS Kernel
+name: 构建自定义 FnNAS 内核
 
 on:
   workflow_dispatch:
     inputs:
       # ========== 镜像来源 ==========
       fnnas_image_path:
-        description: "Path to your FnNAS image file in the repository (e.g., fnnas/fnos_arm_xxx.img)"
+        description: "仓库中的 FnNAS 镜像文件路径（例如：fnnas/fnos_arm_xxx.img）*"
         required: true
         default: ""
         type: string
       image_is_compressed:
-        description: "Is the image file compressed (.xz)?"
+        description: "镜像文件是否为压缩格式（.xz）？"
         required: false
         default: false
         type: boolean
 
       # ========== 内核来源 ==========
       kernel_source:
-        description: "Kernel source type"
+        description: "内核来源类型"
         required: true
         default: "debs_repo"
         type: choice
         options:
-          - debs_repo      # 从 GitHub releases 下载预编译内核
-          - custom_path    # 使用你上传到仓库的内核文件
-          - use_existing   # 直接使用镜像中自带的内核（不替换）
+          - debs_repo
+          - custom_path
+          - use_existing
 
       # 选项1：从 debs_repo 下载
       debs_repo:
-        description: "GitHub repo for kernel debs (owner/repo)"
+        description: "内核 deb 包的 GitHub 仓库（所有者/仓库名）"
         required: false
         default: "ophub/fnnas"
         type: string
       kernel_platform:
-        description: "Platform for debs kernel (amlogic/rockchip/allwinner)"
+        description: "内核适用的硬件平台"
         required: false
         default: "amlogic"
         type: choice
@@ -46,26 +48,26 @@ on:
           - rockchip
           - allwinner
       kernel_version:
-        description: "Kernel version (e.g., 6.18.18 or 6.18.y)"
+        description: "内核版本号（例如：6.18.18 或 6.18.y）"
         required: false
         default: "6.18.y"
         type: string
 
       # 选项2：自定义内核文件路径
       custom_kernel_path:
-        description: "Path to custom kernel tar.gz or deb file (if kernel_source=custom_path)"
+        description: "自定义内核文件路径（当内核来源选择 custom_path 时填写）"
         required: false
         default: ""
         type: string
 
       # ========== 通用选项 ==========
       dtbs_install:
-        description: "Install additional dtbs files"
+        description: "是否安装额外的设备树（dtbs）文件"
         required: false
         default: true
         type: boolean
       dtbs_version:
-        description: "DTB kernel version (if dtbs_install=true)"
+        description: "设备树（dtbs）对应的内核版本"
         required: false
         default: "6.18.y"
         type: string
@@ -80,11 +82,11 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout
+      - name: 检出代码
         uses: actions/checkout@v6
 
       # ========== 准备构建环境 ==========
-      - name: Initialize build environment
+      - name: 初始化构建环境
         id: init
         run: |
           sudo apt-get -y update
@@ -93,12 +95,12 @@ jobs:
           echo "status=success" >> ${GITHUB_OUTPUT}
 
       # ========== 创建大容量虚拟磁盘（避免空间不足） ==========
-      - name: Create virtual disk for extended storage
+      - name: 创建虚拟磁盘扩展存储空间
         id: disk
         run: |
           root_avail=$(df --block-size=1G / | tail -1 | awk '{print $4}')
           root_size=$(( root_avail - 4 ))
-          [[ "${root_size}" -gt 0 ]] || { echo "Error: Insufficient space"; exit 1; }
+          [[ "${root_size}" -gt 0 ]] || { echo "错误：磁盘空间不足"; exit 1; }
           sudo truncate -s "${root_size}"G /root.img
           build_dev=$(sudo losetup --find --show /root.img)
           sudo mkfs.xfs -f "${build_dev}"
@@ -108,7 +110,7 @@ jobs:
           echo "status=success" >> ${GITHUB_OUTPUT}
 
       # ========== 准备自定义镜像文件 ==========
-      - name: Prepare custom FnNAS image
+      - name: 准备自定义 FnNAS 镜像
         id: prepare_image
         working-directory: /builder
         run: |
@@ -119,15 +121,15 @@ jobs:
           # 从仓库复制镜像文件到工作目录
           if [[ -f "${{ github.workspace }}/${IMAGE_PATH}" ]]; then
             cp "${{ github.workspace }}/${IMAGE_PATH}" "fnnas/${IMAGE_NAME}"
-            echo "Copied image from: ${IMAGE_PATH}"
+            echo "已复制镜像：${IMAGE_PATH}"
           else
-            echo "Error: Image file not found at ${IMAGE_PATH}"
+            echo "错误：找不到镜像文件 ${IMAGE_PATH}"
             exit 1
           fi
 
           # 如果文件是 .xz 压缩格式
           if [[ "${{ inputs.image_is_compressed }}" == "true" ]]; then
-            echo "Image is compressed (.xz), will decompress during build"
+            echo "镜像文件为压缩格式（.xz），构建时将自动解压"
           fi
 
           # 创建软链接供后续步骤使用
@@ -135,7 +137,7 @@ jobs:
           echo "status=success" >> ${GITHUB_OUTPUT}
 
       # ========== 构建内核升级包 ==========
-      - name: Build custom FnNAS kernel
+      - name: 构建自定义 FnNAS 内核
         id: build_kernel
         uses: ophub/fnnas@main
         if: ${{ steps.prepare_image.outputs.status == 'success' && !cancelled() }}
@@ -148,7 +150,7 @@ jobs:
           dtbs_install: ${{ inputs.dtbs_install }}
 
       # ========== 上传产物到 Releases ==========
-      - name: Upload Kernel to Release
+      - name: 上传内核升级包到 Releases
         uses: ophub/upload-to-releases@main
         if: ${{ env.PACKAGED_STATUS == 'success' && !cancelled() }}
         with:
@@ -160,7 +162,9 @@ jobs:
           make_latest: false
           gh_token: ${{ secrets.GITHUB_TOKEN }}
           body: |
-            Custom FnNAS Kernel Package
-            - Base image: ${{ inputs.fnnas_image_path }}
-            - Kernel source: ${{ inputs.kernel_source }}
-            - Kernel version: ${{ inputs.kernel_version }}
+            自定义 FnNAS 内核升级包
+            - 基础镜像：${{ inputs.fnnas_image_path }}
+            - 内核来源：${{ inputs.kernel_source }}
+            - 内核版本：${{ inputs.kernel_version }}
+            - 硬件平台：${{ inputs.kernel_platform }}
+            - 构建时间：$(date -u '+%Y-%m-%d %H:%M:%S UTC')
