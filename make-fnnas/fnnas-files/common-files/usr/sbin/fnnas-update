@@ -166,7 +166,7 @@ init_var() {
     [[ -z "${PLATFORM}" ]] && error_msg "[ PLATFORM ] is missing. Aborting kernel update."
 
     # If it is followed by [ : ], it means that the option requires a parameter value
-    local options="r:u:k:b:m:"
+    local options="r:u:k:b:m:l:"
     parsed_args=$(getopt -o "${options}" -- "${@}")
     [[ ${?} -ne 0 ]] && error_msg "Parameter parsing failed."
     eval set -- "${parsed_args}"
@@ -211,6 +211,14 @@ init_var() {
                 shift 2
             else
                 error_msg "Invalid -m parameter [ ${2} ]!"
+            fi
+            ;;
+        -l | --local)
+            if [[ -n "${2}" ]]; then
+                LOCAL_FILE="${2}"
+                shift 2
+            else
+                error_msg "Invalid -l parameter [ ${2} ]!"
             fi
             ;;
         --)
@@ -268,6 +276,59 @@ query_version() {
     cd ${current_path}
     echo -e "${STEPS} Querying kernel version..."
 
+    # ========== 新增：处理本地文件 ==========
+    if [[ -n "${LOCAL_FILE}" ]]; then
+        if [[ ! -f "${LOCAL_FILE}" ]]; then
+            error_msg "Local file not found: ${LOCAL_FILE}"
+        fi
+        echo -e "${INFO} Using local kernel package: ${LOCAL_FILE}"
+        
+        # 创建临时目录
+        kernel_path="$(mktemp -d)"
+        cd "${kernel_path}"
+        
+        # 复制并解压本地文件
+        cp "${LOCAL_FILE}" "${kernel_path}/"
+        local_filename=$(basename "${LOCAL_FILE}")
+        tar -xzf "${local_filename}"
+        [[ "${?}" -ne "0" ]] && error_msg "Failed to extract local kernel package."
+        
+        # 检测解压后的结构
+        # 情况1：直接包含 boot-*.tar.gz 等拆分文件
+        if ls boot-*.tar.gz 1> /dev/null 2>&1; then
+            echo -e "${INFO} Detected split kernel package format."
+            local try_boot="$(ls boot-*.tar.gz 2>/dev/null | head -n 1)"
+            local_kernel_version="$(echo ${try_boot} | sed 's/boot-[^-]*-\(.*\)\.tar\.gz/\1/')"
+            inputs_kernel="${local_kernel_version}"
+            echo -e "${INFO} Local kernel version: [ ${inputs_kernel} ]"
+        else
+            # 情况2：包含一个以内核版本命名的子目录
+            local subdir=$(find . -maxdepth 1 -type d ! -name "." | head -n 1)
+            if [[ -n "${subdir}" && -d "${subdir}" ]]; then
+                echo -e "${INFO} Detected nested kernel package format."
+                cd "${subdir}"
+                if ls boot-*.tar.gz 1> /dev/null 2>&1; then
+                    local try_boot="$(ls boot-*.tar.gz 2>/dev/null | head -n 1)"
+                    local_kernel_version="$(echo ${try_boot} | sed 's/boot-[^-]*-\(.*\)\.tar\.gz/\1/')"
+                    inputs_kernel="${local_kernel_version}"
+                    # 将文件移到 kernel_path 根目录
+                    mv -f *.tar.gz sha256sums "${kernel_path}/" 2>/dev/null
+                    cd "${kernel_path}"
+                    echo -e "${INFO} Local kernel version: [ ${inputs_kernel} ]"
+                else
+                    error_msg "Unsupported local kernel package structure: no boot-*.tar.gz found."
+                fi
+            else
+                error_msg "Unsupported local kernel package structure."
+            fi
+        fi
+        
+        # 设置标志，跳过后续下载
+        kernel_kownload_required="no"
+        return
+    fi
+    # ========== 新增结束 ==========
+
     # Set the kernel path
     kernel_path="$(mktemp -d)"
 
@@ -278,7 +339,7 @@ query_version() {
         # Using local kernel, no need to download from github.com
         kernel_kownload_required="no"
 
-        # Local kernel version comparison(boot-amlogic-6.18.18-trim.tar.gz -> 6.18.18-trim)
+        # Local kernel version comparison(boot-amlogic-6.12.41-trim.tar.gz -> 6.12.41-trim)
         local_kernel_version="$(echo ${try_boot} | sed 's/boot-[^-]*-\(.*\)\.tar\.gz/\1/')"
         echo -e "${INFO} Found the kernel in the current directory: [ ${local_kernel_version} ]"
 
@@ -310,7 +371,7 @@ query_version() {
 
         # Query the latest version
         echo -e "${INFO} Querying the latest kernel version of the [ ${kernel_verpatch} ] series within [ kernel_${KERNEL_TAGS} ]..."
-        # Get the latest version from github releases(e.g: 6.18.18)
+        # Get the latest version from github releases(e.g: 6.12.41)
         latest_version="$(
             curl -fsSL \
                 ${kernel_api}/releases/expanded_assets/kernel_${KERNEL_TAGS} |
@@ -331,7 +392,7 @@ download_kernel() {
     cd ${current_path}
     echo -e "${STEPS} Downloading kernel package..."
 
-    # Download the kernel from [ releases ], e.g: [ 6.18.18-amlogic.tar.gz ]
+    # Download the kernel from [ releases ], e.g: [ 6.12.41-amlogic.tar.gz ]
     kernel_down_from="https://github.com/${KERNEL_REPO}/releases/download/kernel_${KERNEL_TAGS}/${inputs_kernel}-${PLATFORM}.tar.gz"
 
     echo -e "${INFO} Download kernel from: [ ${kernel_down_from} ]"
@@ -506,8 +567,8 @@ update_kernel() {
     [[ "${PLATFORM}" == "amlogic" ]] && (cd /boot && cp -f uInitrd-${kernel_name} uInitrd && cp -f vmlinuz-${kernel_name} zImage)
     [[ "${PLATFORM}" == "rockchip" ]] && (cd /boot && ln -sf uInitrd-${kernel_name} uInitrd && ln -sf vmlinuz-${kernel_name} Image)
     [[ "${PLATFORM}" == "allwinner" ]] && (cd /boot && cp -f uInitrd-${kernel_name} uInitrd && cp -f vmlinuz-${kernel_name} Image)
-    # wxy-oect: MODEL_ID numbers r306 and r307, require special handling of uInitrd
-    [[ "${MODEL_ID}" =~ ^(r306|r307)$ ]] && (cd /boot && ln -sf initrd.img-${kernel_name} uInitrd)
+    # wxy-oect: MODEL_ID numbers r304 and r306, require special handling of uInitrd
+    [[ "${MODEL_ID}" =~ ^(r304|r306)$ ]] && (cd /boot && ln -sf initrd.img-${kernel_name} uInitrd)
     [[ "$(ls /boot/*${kernel_name}* -l 2>/dev/null | grep "^-" | wc -l)" -ge "4" ]] || error_msg "The /boot files is missing."
     echo -e "${INFO} (1/4) Unpacking [ boot-${kernel_name}.tar.gz ] succeeded."
 
@@ -541,12 +602,7 @@ update_kernel() {
 
     # Update fnEnv.txt file
     fnenv_conf_file="/boot/fnEnv.txt"
-    [[ -f "${fnenv_conf_file}" ]] && {
-        sed -i \
-            -e "s|^kernelfile=.*|kernelfile=vmlinuz-${kernel_name}|g" \
-            -e "s|^initrdfile=.*|initrdfile=uInitrd-${kernel_name}|g" \
-            "${fnenv_conf_file}"
-    }
+    [[ -f "${fnenv_conf_file}" ]] && sed -i "s|^kernelfile=.*|kernelfile=vmlinuz-${kernel_name}|g" ${fnenv_conf_file}
 
     # Delete kernel tmpfiles
     rm -f *${PLATFORM}-${kernel_name}*.tar.gz sha256sums
@@ -801,27 +857,26 @@ sos_kernel() {
 }
 
 # Display help information
-# prettytable (single_border_style): https://github.com/jazzband/prettytable/blob/main/src/prettytable/prettytable.py#L1358
 help_info() {
     clear
-    cat <<EOF
-  ┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-  │  Example: fnnas-update -k 5.15.50 -u stable                                                                                    │
-  ├───────────┬──────────────┬─────────────────────────────────────┬───────────────────────────────────────────────────────────────┤
-  │  Optional │ Default      │ Value                               │ Description                                                   │
-  ├───────────┼──────────────┼─────────────────────────────────────┼───────────────────────────────────────────────────────────────┤
-  │  -r       │ ophub/kernel │ <owner>/<repo>                      │ Set the repository for downloading kernels from github.com    │
-  │  -u       │ automate     │ stable/flippy/beta/rk3588/rk35xx/h6 │ Set the tags suffix of the kernel used                        │
-  │  -k       │ latest       │ kernel-version                      │ Set the kernel version                                        │
-  │  -c       │ None         │ domain-name                         │ Set the cdn domain name for accelerated access to github.com  │
-  │  -b       │ yes          │ yes/no                              │ Automatically backup the current system kernel                │
-  │  -m       │ no           │ yes/no                              │ Use Mainline u-boot                                           │
-  │  -s       │ None         │ None/mmcblkX/nvmeXnX/sdX            │ [SOS] Restore the system kernel of eMMC/NVMe/sdX disk         │
-  └───────────┴──────────────┴─────────────────────────────────────┴───────────────────────────────────────────────────────────────┘
+
+    cat <<'EOF'
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  可选参数     默认值          参数值                         说明
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  -r           ophub/kernel    <所有者>/<仓库>               设置从 GitHub 下载内核的仓库
+  -u           automate        stable/flippy/beta/rk3588/..  设置内核使用的标签后缀
+  -k           latest          内核版本号                     设置内核版本
+  -c           无              域名                           设置用于加速访问 GitHub 的 CDN 域名
+  -b           yes             yes/no                         是否自动备份当前系统内核
+  -m           no              yes/no                         是否使用主线 u-boot
+  -s           无              无/mmcblkX/nvmeXnX/sdX         [SOS] 恢复 eMMC/NVMe/sdX 等磁盘中的系统内核
+  -l           无              /路径/到/内核包.tar.gz         从本地内核包文件进行升级
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 EOF
+
     exit 0
 }
-
 # Check script permission
 [[ "$(id -u)" == "0" ]] || error_msg "Please run the script as root: [ sudo $0 ]"
 echo -e "${STEPS} Welcome to the kernel update tool."
