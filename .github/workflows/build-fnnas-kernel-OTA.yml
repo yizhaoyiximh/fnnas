@@ -23,7 +23,7 @@ on:
 
       # ========== 内核来源 ==========
       kernel_source:
-        description: "内核来源类型"
+        description: "内核来源类型（debs_repo=下载预编译内核 / custom_path=自定义文件 / use_existing=保留自带内核）"
         required: true
         default: "debs_repo"
         type: choice
