@@ -151,7 +151,7 @@ jobs:
         uses: ophub/upload-to-releases@main
         if: ${{ env.PACKAGED_STATUS == 'success' && !cancelled() }}
         with:
-          tag: custom_kernel_${{ github.run_number }}
+          tag: kernel_${{ inputs.kernel_version }}_${{ github.run_number }}
           artifacts: ${{ env.PACKAGED_OUTPUTPATH }}/*
           allow_updates: true
           remove_artifacts: false
