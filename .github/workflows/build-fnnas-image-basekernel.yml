@@ -1,6 +1,6 @@
 #=====================================================================================
 # https://github.com/ophub/fnnas
-# Description: Build FnNAS Image / 构建FnNAS镜像
+# Description: Build Custom FnNAS Image / 构建自定义 FnNAS镜像
 #=====================================================================================
 
 name: 构建自定义 FnNAS镜像
@@ -15,12 +15,12 @@ on:
           (e.g., rockchip_1253, amlogic_1252, or custom version)
           （例如：rockchip_1253、amlogic_1252 或自定义版本）
         required: true
-        default: "amlogic_1.2.0503"  # 已修改
+        default: "amlogic_1.2.0503"
         type: string
       fnnas_board:
         description: "Select target device board / 选择目标设备板型"
         required: false
-        default: "rockchip50"
+        default: "s922x-ct2000"
         type: choice
         options:
           - allwinner
@@ -261,7 +261,7 @@ on:
         options:
           - ophub/fnnas
       fnnas_kernel:
-        description: "Kernel version (ignored when use_base_kernel is true) / 内核版本（当启用'使用基础镜像自带内核'时忽略）"
+        description: "Kernel version / 内核版本"
         required: false
         default: "6.18.y"
         type: choice
@@ -269,12 +269,12 @@ on:
           - 6.18.y
           - 6.12.y
       auto_kernel:
-        description: "Auto use the latest kernel (ignored when use_base_kernel is true) / 自动使用最新内核（当启用'使用基础镜像自带内核'时忽略）"
+        description: "Auto use the latest kernel / 自动使用最新内核"
         required: false
         default: true
         type: boolean
-      use_base_kernel:
-        description: "Use the kernel that comes with the base image (skip kernel replacement) / 使用基础镜像自带内核（跳过内核替换）"
+      skip_kernel:
+        description: "Skip kernel replacement (use base image kernel) / 跳过内核替换（使用基础镜像自带内核）"
         required: false
         default: false
         type: boolean
@@ -289,7 +289,7 @@ on:
       builder_name:
         description: "Builder signature / 构建者签名"
         required: false
-        default: "ophub"
+        default: "yizhaoyiximh"
         type: choice
         options:
           - ophub
@@ -503,15 +503,15 @@ jobs:
 
       - name: Package FnNAS for target boards / 为目标板型打包 FnNAS
         if: ${{ steps.down.outputs.status == 'success' && !cancelled() }}
-        uses: ophub/fnnas@main
+        # 使用您的 Fork 仓库
+        uses: yizhaoyiximh/fnnas@main
         with:
-          # 使用工作目录下的相对路径，匹配 .gz 或 .xz 文件
           fnnas_path: ${{ github.workspace }}/fnnas/*.img.gz
           fnnas_board: ${{ inputs.fnnas_board }}
-          # 当 use_base_kernel 为 true 时，传递空字符串和 false，让 Action 跳过内核替换
-          fnnas_kernel: ${{ inputs.use_base_kernel == true && '' || inputs.fnnas_kernel }}
-          auto_kernel: ${{ inputs.use_base_kernel == true && false || inputs.auto_kernel }}
           kernel_repo: ${{ inputs.kernel_repo }}
+          fnnas_kernel: ${{ inputs.fnnas_kernel }}
+          auto_kernel: ${{ inputs.auto_kernel }}
+          skip_kernel: ${{ inputs.skip_kernel }}
           rootfs_expand: ${{ inputs.rootfs_expand }}
           builder_name: ${{ inputs.builder_name }}
 
