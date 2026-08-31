@@ -40,6 +40,10 @@ inputs:
     description: "Set fnnas builder signature."
     required: false
     default: ""
+  skip_kernel:
+    description: "Skip kernel replacement (use base image kernel). / 跳过内核替换（使用基础镜像自带内核）"
+    required: false
+    default: "false"
   # For compile kernel -----
   debs_repo:
     description: "Set fnnas debs repository."
@@ -135,6 +139,8 @@ runs:
             [[ -n "${{ inputs.fnnas_size }}"    ]] && make_args+=(-s "${{ inputs.fnnas_size }}")
             [[ -n "${{ inputs.rootfs_expand }}" ]] && make_args+=(-e "${{ inputs.rootfs_expand }}")
             [[ -n "${builder_name}"             ]] && make_args+=(-n "${builder_name}")
+            # 新增：传递 skip_kernel 参数
+            [[ "${{ inputs.skip_kernel }}" == "true" ]] && make_args+=(-u "true")
             sudo ./renas "${make_args[@]}"
 
         elif [[ "${build_target}" == "kernel" ]]; then
