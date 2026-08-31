@@ -1,28 +1,24 @@
 #=====================================================================================
 # https://github.com/ophub/fnnas
-# Description: Build FnNAS Image
+# Description: Build FnNAS Image / 构建FnNAS镜像
 #=====================================================================================
 
-name: Build FnNAS Image-可选镜像自带内核
+name: Build FnNAS Image / 构建FnNAS镜像
 
 on:
   repository_dispatch:
   workflow_dispatch:
     inputs:
       fnnas_base_version:
-        description: "Select fnnas base image version"
-        required: false
+        description: |
+          Base image version / 基础镜像版本
+          (e.g., rockchip_1253, amlogic_1252, or custom version)
+          （例如：rockchip_1253、amlogic_1252 或自定义版本）
+        required: true
         default: "rockchip_1253"
-        type: choice
-        options:
-          - amlogic_1252
-          - amlogic_693
-          - rockchip_1253
-          - rockchip_692
-          - allwinner_1254
-          - allwinner_691
+        type: string
       fnnas_board:
-        description: "Select fnnas device board"
+        description: "Select target device board / 选择目标设备板型"
         required: false
         default: "rockchip50"
         type: choice
@@ -258,14 +254,14 @@ on:
           - zk-r39a
           - zysj
       kernel_repo:
-        description: "Set fnnas kernel repository"
+        description: "Kernel repository / 内核仓库"
         required: false
         default: "ophub/fnnas"
         type: choice
         options:
           - ophub/fnnas
       fnnas_kernel:
-        description: "Select fnnas kernel version (ignored when use_base_kernel is true)"
+        description: "Kernel version (ignored when use_base_kernel is true) / 内核版本（当 use_base_kernel 为 true 时忽略）"
         required: false
         default: "6.18.y"
         type: choice
@@ -273,25 +269,25 @@ on:
           - 6.18.y
           - 6.12.y
       auto_kernel:
-        description: "Auto use the latest kernel (ignored when use_base_kernel is true)"
+        description: "Auto use the latest kernel (ignored when use_base_kernel is true) / 自动使用最新内核（当 use_base_kernel 为 true 时忽略）"
         required: false
         default: true
         type: boolean
       use_base_kernel:
-        description: "Use the kernel that comes with the base image (skip kernel replacement)"
+        description: "Use the kernel that comes with the base image (skip kernel replacement) / 使用基础镜像自带内核（跳过内核替换）"
         required: false
         default: false
         type: boolean
       rootfs_expand:
-        description: "Set rootfs expansion size(GiB)"
+        description: "Rootfs expansion size (GiB) / 根文件系统扩展大小（GiB）"
         required: false
         default: "16"
       fnnas_url:
-        description: "Custom fnnas image download url"
+        description: "Custom fnnas image download url (optional) / 自定义 fnnas 镜像下载地址（可选）"
         required: false
         default: ""
       builder_name:
-        description: "Set fnnas builder signature"
+        description: "Builder signature / 构建者签名"
         required: false
         default: "ophub"
         type: choice
@@ -299,6 +295,7 @@ on:
           - ophub
           - angel
           - yourname
+          - yizhaoyiximh
 
 env:
   TZ: Etc/UTC
@@ -314,7 +311,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Initialize the build environment
+      - name: Initialize the build environment / 初始化构建环境
         id: init
         env:
           DEBIAN_FRONTEND: noninteractive
@@ -340,7 +337,7 @@ jobs:
           timedatectl status || true
           echo "status=success" >> ${GITHUB_OUTPUT}
 
-      - name: Create virtual disk for extended storage
+      - name: Create virtual disk for extended storage / 创建扩展存储虚拟磁盘
         id: disk
         run: |
           # Get available space in exact GB
@@ -359,7 +356,7 @@ jobs:
           df -Th
           echo "status=success" >> ${GITHUB_OUTPUT}
 
-      - name: Download fnnas image [ ${{ inputs.fnnas_base_version }} ]
+      - name: Download fnnas image [ ${{ inputs.fnnas_base_version }] / 下载 fnnas 镜像 [ ${{ inputs.fnnas_base_version }} ]
         id: down
         working-directory: /builder
         if: (!cancelled())
@@ -466,7 +463,7 @@ jobs:
           echo "build_tag=${build_tag}" >> ${GITHUB_ENV}
           echo "status=success" >> ${GITHUB_OUTPUT}
 
-      - name: Package FnNAS for target boards
+      - name: Package FnNAS for target boards / 为目标板型打包 FnNAS
         if: ${{ steps.down.outputs.status == 'success' && !cancelled() }}
         uses: ophub/fnnas@main
         with:
@@ -481,7 +478,7 @@ jobs:
           # 新增参数：明确告知 Action 使用基础镜像自带内核
           use_base_kernel: ${{ inputs.use_base_kernel }}
 
-      - name: Upload packaged FnNAS to Release
+      - name: Upload packaged FnNAS to Release / 上传打包的 FnNAS 到 Release
         uses: ophub/upload-to-releases@main
         if: ${{ env.PACKAGED_STATUS == 'success' && !cancelled() }}
         with:
