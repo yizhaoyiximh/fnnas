@@ -3,7 +3,7 @@
 # Description: Build FnNAS Image / 构建FnNAS镜像
 #=====================================================================================
 
-name: 构建自定义 FnNAS 镜像
+name: 构建自定义FnNAS镜像
 
 on:
   repository_dispatch:
@@ -356,7 +356,7 @@ jobs:
           df -Th
           echo "status=success" >> ${GITHUB_OUTPUT}
 
-      - name: Download fnnas image [ ${{ inputs.fnnas_base_version }] / 下载 fnnas 镜像 [ ${{ inputs.fnnas_base_version }} ]
+      - name: Download fnnas image
         id: down
         working-directory: /builder
         if: (!cancelled())
@@ -369,6 +369,8 @@ jobs:
           input_url="${{ inputs.fnnas_url }}"
           fnnas_base_version="${{ inputs.fnnas_base_version }}"
           [[ -n "${fnnas_base_version}" ]] && build_tag="fnnas_${fnnas_base_version}" || build_tag="fnnas_save"
+
+          echo "Downloading base image version: ${fnnas_base_version}"
 
           # -------------------------------------------------------
           # Case A: URL specified
@@ -420,7 +422,7 @@ jobs:
           # Case B: Automatically fetch the latest version
           # -------------------------------------------------------
           else
-              echo "Auto-detecting latest release..."
+              echo "Auto-detecting latest release for version: ${fnnas_base_version}"
               latest_version=$(curl -s \
                   -H "Accept: application/vnd.github+json" \
                   -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
@@ -436,6 +438,7 @@ jobs:
 
               [[ -z "${latest_version}" || "${latest_version}" == "null" ]] && {
               echo "Error: Failed to resolve FnNAS image download URL."
+              exit 1
               }
 
               latest_url="$(echo ${latest_version} | jq -r '.url')"
@@ -469,13 +472,11 @@ jobs:
         with:
           fnnas_path: fnnas/*.img.xz
           fnnas_board: ${{ inputs.fnnas_board }}
-          # 当 use_base_kernel 为 true 时，不传递内核相关参数（或传递空值），使用基础镜像自带内核
           fnnas_kernel: ${{ inputs.use_base_kernel == true && '' || inputs.fnnas_kernel }}
           auto_kernel: ${{ inputs.use_base_kernel == true && false || inputs.auto_kernel }}
           kernel_repo: ${{ inputs.kernel_repo }}
           rootfs_expand: ${{ inputs.rootfs_expand }}
           builder_name: ${{ inputs.builder_name }}
-          # 新增参数：明确告知 Action 使用基础镜像自带内核
           use_base_kernel: ${{ inputs.use_base_kernel }}
 
       - name: Upload packaged FnNAS to Release / 上传打包的 FnNAS 到 Release
