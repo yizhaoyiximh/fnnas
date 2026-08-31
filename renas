@@ -113,6 +113,8 @@ root_mb="6144"
 rootfs_expand="16"
 # Builder signature
 builder_name=""
+# Skip kernel replacement (default: false)
+skip_kernel="false"
 
 # Set font color
 STEPS="[\033[95m STEPS \033[0m]"
@@ -180,7 +182,8 @@ init_var() {
     echo -e "${STEPS} Initializing variables..."
 
     # If followed by [ : ], the option requires a parameter value
-    local options="b:r:k:a:e:s:n:"
+    # Added u: for skip_kernel parameter
+    local options="b:r:k:a:e:s:n:u:"
     parsed_args=$(getopt -o "${options}" -- "${@}")
     [[ ${?} -ne 0 ]] && error_msg "Failed to parse command-line parameters."
     eval set -- "${parsed_args}"
@@ -247,6 +250,14 @@ init_var() {
                 shift 2
             else
                 error_msg "Invalid -n parameter [ ${2} ]!"
+            fi
+            ;;
+        -u | --SkipKernel)
+            if [[ -n "${2}" ]]; then
+                skip_kernel="${2}"
+                shift 2
+            else
+                error_msg "Invalid -u parameter [ ${2} ]!"
             fi
             ;;
         --)
@@ -1213,7 +1224,14 @@ loop_make() {
                     extract_fnnas
                     make_image
                     copy_files
-                    replace_kernel
+
+                    # Skip kernel replacement if -u true is set
+                    if [[ "${skip_kernel}" == "true" ]]; then
+                        echo -e "${INFO} Skipping kernel replacement as requested (using base image kernel)."
+                    else
+                        replace_kernel
+                    fi
+
                     refactor_bootfs
                     refactor_rootfs
                     clean_tmp
