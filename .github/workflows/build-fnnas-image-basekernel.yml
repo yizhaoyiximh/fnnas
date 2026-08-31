@@ -15,7 +15,7 @@ on:
           (e.g., rockchip_1253, amlogic_1252, or custom version)
           （例如：rockchip_1253、amlogic_1252 或自定义版本）
         required: true
-        default: "rockchip_1253"
+        default: "amlogic_1.2.0503"  # 已修改
         type: string
       fnnas_board:
         description: "Select target device board / 选择目标设备板型"
