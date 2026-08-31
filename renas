@@ -702,10 +702,15 @@ extract_fnnas() {
 
     cd "${tmp_fnnas}"
 
-    # Remove /boot files (will be replaced later)
-    rm -rf boot/*
-    # Remove kernel modules (will be replaced later)
-    rm -rf usr/lib/modules/*
+    # 如果 skip_kernel=true，跳过删除 /boot 和 usr/lib/modules
+    if [[ "${skip_kernel}" != "true" ]]; then
+        rm -rf boot/*
+        rm -rf usr/lib/modules/*
+    else
+        echo -e "${INFO} Keeping original kernel files (skip_kernel=true)."
+    # 但仍然需要删除符号链接等
+        rm -rf bin lib sbin var/lock var/run
+    fi
     # Remove apt cache files
     rm -rf var/cache/apt/archives/* var/cache/man/*
     # Remove symbolic links (will be recreated later)
