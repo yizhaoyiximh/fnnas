@@ -3,7 +3,7 @@
 # Description: Build FnNAS Image
 #=====================================================================================
 
-name: Build FnNAS Image-basekernel
+name: Build FnNAS Image-可选镜像自带内核
 
 on:
   repository_dispatch:
