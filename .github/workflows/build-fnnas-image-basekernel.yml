@@ -3,7 +3,7 @@
 # Description: Build FnNAS Image / 构建FnNAS镜像
 #=====================================================================================
 
-name: 构建自定义FnNAS镜像
+name: 构建自定义 FnNAS镜像
 
 on:
   repository_dispatch:
@@ -406,6 +406,11 @@ jobs:
                   if [[ -f "fnnas/${filename}" ]]; then
                       echo "Download success via gh-cli."
                       echo "status=success" >> ${GITHUB_OUTPUT}
+                      # 直接复制文件到工作目录
+                      mkdir -p ${{ github.workspace }}/fnnas
+                      cp -f "fnnas/${filename}" ${{ github.workspace }}/fnnas/
+                      echo "Copied to workspace: ${{ github.workspace }}/fnnas/${filename}"
+                      echo "build_tag=${build_tag}" >> ${GITHUB_ENV}
                       exit 0
                   else
                       echo "Error: gh download failed."
@@ -436,10 +441,10 @@ jobs:
                   .[0] |
                   {data: .updated_at, url: .url, name: .name}')
 
-              [[ -z "${latest_version}" || "${latest_version}" == "null" ]] && {
-              echo "Error: Failed to resolve FnNAS image download URL."
-              exit 1
-              }
+              if [[ -z "${latest_version}" || "${latest_version}" == "null" ]]; then
+                  echo "Error: Failed to resolve FnNAS image download URL."
+                  exit 1
+              fi
 
               latest_url="$(echo ${latest_version} | jq -r '.url')"
               fnnas_filename="$(echo ${latest_version} | jq -r '.name')"
@@ -457,28 +462,58 @@ jobs:
                "${latest_url}" \
                -o "fnnas/${fnnas_filename}"
 
-          [[ "${?}" -ne "0" ]] && echo "Error: Download failed." && exit 1
+          if [[ "${?}" -ne "0" ]]; then
+              echo "Error: Download failed."
+              exit 1
+          fi
 
-          # Create directory symlinks for packaging
-          ln -sf /builder/fnnas ${{ github.workspace }}/fnnas
-          ln -sf /builder/fnnas /home/runner/work/_actions/ophub/fnnas/main/fnnas
+          # 验证文件是否存在
+          if [[ ! -f "fnnas/${fnnas_filename}" ]]; then
+              echo "Error: Downloaded file not found: fnnas/${fnnas_filename}"
+              exit 1
+          fi
+
+          echo "Download success: ${fnnas_filename}"
+          echo "status=success" >> ${GITHUB_OUTPUT}
+
+          # 直接复制文件到工作目录（不使用符号链接）
+          mkdir -p ${{ github.workspace }}/fnnas
+          cp -f "fnnas/${fnnas_filename}" ${{ github.workspace }}/fnnas/
+          echo "Copied to workspace: ${{ github.workspace }}/fnnas/${fnnas_filename}"
+
+          # 显示目录内容用于调试
+          echo "Contents of /builder/fnnas:"
+          ls -la /builder/fnnas/
+          echo "Contents of workspace/fnnas:"
+          ls -la ${{ github.workspace }}/fnnas/
 
           echo "build_tag=${build_tag}" >> ${GITHUB_ENV}
-          echo "status=success" >> ${GITHUB_OUTPUT}
+
+      - name: Debug file locations / 调试文件位置
+        if: ${{ steps.down.outputs.status == 'success' && !cancelled() }}
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Workspace directory: ${{ github.workspace }}"
+          echo "Contents of workspace/fnnas:"
+          ls -la ${{ github.workspace }}/fnnas/ || echo "Directory not found"
+          echo "Searching for .img.gz files in workspace:"
+          find ${{ github.workspace }} -name "*.img.gz" -type f 2>/dev/null || echo "No .img.gz files found"
+          echo "Searching for .img.xz files in workspace:"
+          find ${{ github.workspace }} -name "*.img.xz" -type f 2>/dev/null || echo "No .img.xz files found"
 
       - name: Package FnNAS for target boards / 为目标板型打包 FnNAS
         if: ${{ steps.down.outputs.status == 'success' && !cancelled() }}
         uses: ophub/fnnas@main
         with:
+          # 使用工作目录下的相对路径，匹配 .gz 或 .xz 文件
           fnnas_path: ${{ github.workspace }}/fnnas/*.img.gz
           fnnas_board: ${{ inputs.fnnas_board }}
-          # 通过条件判断：当 use_base_kernel 为 true 时，传递空字符串和 false，让 Action 跳过内核替换
+          # 当 use_base_kernel 为 true 时，传递空字符串和 false，让 Action 跳过内核替换
           fnnas_kernel: ${{ inputs.use_base_kernel == true && '' || inputs.fnnas_kernel }}
           auto_kernel: ${{ inputs.use_base_kernel == true && false || inputs.auto_kernel }}
           kernel_repo: ${{ inputs.kernel_repo }}
           rootfs_expand: ${{ inputs.rootfs_expand }}
           builder_name: ${{ inputs.builder_name }}
-          # 注意：不再传递 use_base_kernel，因为 Action 不支持此参数
 
       - name: Upload packaged FnNAS to Release / 上传打包的 FnNAS 到 Release
         uses: ophub/upload-to-releases@main
