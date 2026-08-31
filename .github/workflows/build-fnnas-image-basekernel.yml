@@ -470,7 +470,7 @@ jobs:
         if: ${{ steps.down.outputs.status == 'success' && !cancelled() }}
         uses: ophub/fnnas@main
         with:
-          fnnas_path: fnnas/*.img.gz
+          fnnas_path: ${{ github.workspace }}/fnnas/*.img.gz
           fnnas_board: ${{ inputs.fnnas_board }}
           # 通过条件判断：当 use_base_kernel 为 true 时，传递空字符串和 false，让 Action 跳过内核替换
           fnnas_kernel: ${{ inputs.use_base_kernel == true && '' || inputs.fnnas_kernel }}
