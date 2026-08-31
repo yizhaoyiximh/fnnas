@@ -261,7 +261,7 @@ on:
         options:
           - ophub/fnnas
       fnnas_kernel:
-        description: "Kernel version (ignored when use_base_kernel is true) / 内核版本（当 use_base_kernel 为 true 时忽略）"
+        description: "Kernel version (ignored when use_base_kernel is true) / 内核版本（当启用'使用基础镜像自带内核'时忽略）"
         required: false
         default: "6.18.y"
         type: choice
@@ -269,7 +269,7 @@ on:
           - 6.18.y
           - 6.12.y
       auto_kernel:
-        description: "Auto use the latest kernel (ignored when use_base_kernel is true) / 自动使用最新内核（当 use_base_kernel 为 true 时忽略）"
+        description: "Auto use the latest kernel (ignored when use_base_kernel is true) / 自动使用最新内核（当启用'使用基础镜像自带内核'时忽略）"
         required: false
         default: true
         type: boolean
@@ -356,7 +356,7 @@ jobs:
           df -Th
           echo "status=success" >> ${GITHUB_OUTPUT}
 
-      - name: Download fnnas image
+      - name: Download fnnas image / 下载 fnnas 镜像
         id: down
         working-directory: /builder
         if: (!cancelled())
@@ -472,12 +472,13 @@ jobs:
         with:
           fnnas_path: fnnas/*.img.xz
           fnnas_board: ${{ inputs.fnnas_board }}
+          # 通过条件判断：当 use_base_kernel 为 true 时，传递空字符串和 false，让 Action 跳过内核替换
           fnnas_kernel: ${{ inputs.use_base_kernel == true && '' || inputs.fnnas_kernel }}
           auto_kernel: ${{ inputs.use_base_kernel == true && false || inputs.auto_kernel }}
           kernel_repo: ${{ inputs.kernel_repo }}
           rootfs_expand: ${{ inputs.rootfs_expand }}
           builder_name: ${{ inputs.builder_name }}
-          use_base_kernel: ${{ inputs.use_base_kernel }}
+          # 注意：不再传递 use_base_kernel，因为 Action 不支持此参数
 
       - name: Upload packaged FnNAS to Release / 上传打包的 FnNAS 到 Release
         uses: ophub/upload-to-releases@main
