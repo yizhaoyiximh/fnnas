@@ -3,7 +3,7 @@
 # Description: Build FnNAS Image
 #=====================================================================================
 
-name: Build FnNAS Image
+name: Build FnNAS Image-basekernel
 
 on:
   repository_dispatch:
