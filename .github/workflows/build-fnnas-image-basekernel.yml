@@ -3,7 +3,7 @@
 # Description: Build FnNAS Image / 构建FnNAS镜像
 #=====================================================================================
 
-name: Build FnNAS Image / 构建FnNAS镜像
+name: Build FnNAS Image-basekernel / 构建FnNAS镜像
 
 on:
   repository_dispatch:
