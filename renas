@@ -870,6 +870,15 @@ make_image() {
 copy_files() {
     process_msg "(3/7) Copying FnNAS files."
     cd "${current_path}"
+    # ========== 添加调试信息 ==========
+    echo -e "${INFO} === DEBUG: copy_files started ==="
+    echo -e "${INFO} skip_kernel = [ ${skip_kernel} ]"
+    echo -e "${INFO} tmp_fnnas = [ ${tmp_fnnas} ]"
+    echo -e "${INFO} tag_bootfs = [ ${tag_bootfs} ]"
+    echo -e "${INFO} Checking if ${tmp_fnnas}/boot exists:"
+    ls -la "${tmp_fnnas}/boot" 2>/dev/null || echo "NOT FOUND"
+    echo -e "${INFO} =============================="
+    # ========== 调试信息结束 ==========
 
     # Create a dual-partition general directory
     tag_bootfs="${tmp_build}/bootfs"
