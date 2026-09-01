@@ -890,6 +890,20 @@ copy_files() {
     # Copy the full FnNAS image
     cp -af "${tmp_fnnas}/." "${tag_rootfs}"
 
+    # ========== 新增：当 skip_kernel=true 时，复制基础镜像的 /boot 到独立 boot 分区 ==========
+    if [[ "${skip_kernel}" == "true" ]]; then
+        echo -e "${INFO} Copying base image /boot to boot partition (skip_kernel=true)..."
+        if [[ -d "${tmp_fnnas}/boot" && -n "$(ls -A ${tmp_fnnas}/boot 2>/dev/null)" ]]; then
+            cp -af "${tmp_fnnas}/boot/." "${tag_bootfs}/"
+            echo -e "${INFO} Copied base image /boot to boot partition."
+            echo -e "Contents of boot partition:"
+            ls -la "${tag_bootfs}/"
+        else
+            echo -e "${WARNING} Base image /boot directory is empty or missing."
+        fi
+    fi
+    # ========== 新增结束 ==========
+
     # Copy the common files
     [[ -d "${common_files}" ]] && cp -af --no-preserve=ownership "${common_files}/." "${tag_rootfs}"
 
@@ -924,7 +938,6 @@ copy_files() {
     # Remove .git directories
     rm -rf $(find "${tmp_build}" -type d -name '.git')
 }
-
 replace_kernel() {
     process_msg "(4/7) Replacing kernel."
     cd "${current_path}"
