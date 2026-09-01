@@ -702,15 +702,28 @@ extract_fnnas() {
 
     cd "${tmp_fnnas}"
 
-    # 如果 skip_kernel=true，跳过删除 /boot 和 usr/lib/modules
-    if [[ "${skip_kernel}" != "true" ]]; then
+    # 调试输出
+    echo -e "${INFO} Debug: skip_kernel = [ ${skip_kernel} ]"
+    
+    # ========== 条件性删除 ==========
+    # 检查 skip_kernel 是否为 "true"
+    if [[ "${skip_kernel}" == "true" ]]; then
+        echo -e "${INFO} Keeping original kernel files (skip_kernel=true)."
+        # 不删除 /boot 和 /usr/lib/modules
+        # 但需要注意：boot 目录和 modules 目录必须存在，否则后续步骤可能出错
+        if [[ ! -d "boot" ]]; then
+            echo -e "${WARNING} /boot directory not found in base image!"
+        fi
+        if [[ ! -d "usr/lib/modules" ]]; then
+            echo -e "${WARNING} /usr/lib/modules directory not found in base image!"
+        fi
+    else
+        echo -e "${INFO} Removing /boot and kernel modules for kernel replacement."
         rm -rf boot/*
         rm -rf usr/lib/modules/*
-    else
-        echo -e "${INFO} Keeping original kernel files (skip_kernel=true)."
-    # 但仍然需要删除符号链接等
-        rm -rf bin lib sbin var/lock var/run
     fi
+    # ========== 删除结束 ==========
+
     # Remove apt cache files
     rm -rf var/cache/apt/archives/* var/cache/man/*
     # Remove symbolic links (will be recreated later)
