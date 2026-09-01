@@ -899,17 +899,33 @@ copy_files() {
     # Copy the full FnNAS image
     cp -af "${tmp_fnnas}/." "${tag_rootfs}"
 
-    # ========== 新增：当 skip_kernel=true 时，复制基础镜像的 /boot 到独立 boot 分区 ==========
+    # ========== 新增：当 skip_kernel=true 时，复制基础镜像的 BOOT 分区到新 boot 分区 ==========
     if [[ "${skip_kernel}" == "true" ]]; then
-        echo -e "${INFO} Copying base image /boot to boot partition (skip_kernel=true)..."
-        if [[ -d "${tmp_fnnas}/boot" && -n "$(ls -A ${tmp_fnnas}/boot 2>/dev/null)" ]]; then
-            cp -af "${tmp_fnnas}/boot/." "${tag_bootfs}/"
-            echo -e "${INFO} Copied base image /boot to boot partition."
+        echo -e "${INFO} Copying base image BOOT partition to boot partition (skip_kernel=true)..."
+        
+        base_boot_partition="${loop_old}p1"
+        base_boot_mount="${tmp_path}/base_boot"
+        mkdir -p "${base_boot_mount}"
+        
+        # 挂载基础镜像的 boot 分区
+        if [[ "${bootfs_type}" == "fat32" ]]; then
+            mount_try vfat "${base_boot_partition}" "${base_boot_mount}"
+        else
+            mount_try ext4 "${base_boot_partition}" "${base_boot_mount}"
+        fi
+        
+        # 检查并复制
+        if [[ -d "${base_boot_mount}" && -n "$(ls -A ${base_boot_mount} 2>/dev/null)" ]]; then
+            cp -af "${base_boot_mount}/." "${tag_bootfs}/"
+            echo -e "${INFO} Copied base image BOOT partition to boot partition."
             echo -e "Contents of boot partition:"
             ls -la "${tag_bootfs}/"
         else
-            echo -e "${WARNING} Base image /boot directory is empty or missing."
+            echo -e "${WARNING} Base image BOOT partition is empty or missing."
         fi
+        
+        umount -f "${base_boot_mount}" 2>/dev/null
+        rm -rf "${base_boot_mount}"
     fi
     # ========== 新增结束 ==========
 
